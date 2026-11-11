@@ -1,0 +1,482 @@
+# Replit Agent Prompt: "Branchcut" — Version Control for Video Timelines
+
+Paste everything below into Replit Agent as one prompt.
+
+---
+
+## 0. Instructions to the agent (read first)
+
+You are building a polished, demo-ready **frontend-only prototype**. Follow these rules:
+
+1. **Build in the phases listed in Section 8, in order.** After each phase, make sure the app runs with no console errors and (from Phase 2 on) `npm test` passes before moving on.
+2. **Do not add features outside the scope in Sections 2 and 4.** If something is ambiguous, pick the simplest reasonable option and record it in the README under "Assumptions". Do not stop to ask me questions.
+3. **No backend, no auth, no external API calls, no API keys.** Everything runs in the browser. Persist to `localStorage`.
+4. **No real video rendering.** The preview is a "virtual player" built from DOM/CSS (Section 6.5).
+5. **Use real, specific content** (the seed data in Section 5). No lorem ipsum, no empty placeholder screens.
+6. **Keep code clean and typed.** TypeScript strict mode, small files, pure functions for all diff/merge logic (no React or DOM imports in `src/core`).
+7. The diff and merge engine is the heart of this project. It must be correct and unit-tested before the UI is built on top of it.
+
+---
+
+## 1. Product overview
+
+**Name (working):** Branchcut
+**Tagline:** Version control for video timelines.
+
+Code has git. Video editing has nothing: people end up with files named `final_v3_actual (1).mp4`. Branchcut is a prototype showing what git-style version control could look like for a video **timeline** (not the video files themselves). It lets two editors branch from the same cut, work in parallel, compare versions visually, and merge them, with conflicts shown in a way an editor can resolve without knowing anything about git.
+
+**Context:** This is an independent prototype inspired by the "Version Control" problem in the public "Hard problems" page of the AI video editor Cardboard (cardboard.ai). It is **not affiliated with Cardboard** and uses a simplified, invented timeline format. Show this disclaimer in the app footer: *"Independent prototype inspired by Cardboard's public 'Hard problems' page. Not affiliated. Uses mock data."*
+
+**Primary audience of the demo:** startup founders and engineers who will watch a 45-second screen recording and might try the live demo. First impression and clarity matter more than breadth.
+
+---
+
+## 2. Goals and non-goals
+
+### Goals
+- G1. Represent a video timeline as structured data with stable clip identities.
+- G2. Compute and **visually display a diff** between any two versions.
+- G3. Support **commits, branches, checkout, and a history graph**.
+- G4. Support a **three-way merge** with automatic resolution of non-conflicting changes.
+- G5. Present **conflicts visually** with one-click resolution.
+- G6. Provide a **virtual preview player** (side by side in Compare mode).
+- G7. Ship a **one-click demo project** that tells a clear story (Section 5).
+- G8. Be deployable on Replit and look polished on a 1080p screen recording.
+
+### Non-goals (do NOT build)
+- Real video/audio decoding, rendering, or export
+- Backend, database, accounts, real-time collaboration, CRDTs
+- Auto-ripple editing (gaps on the timeline are allowed)
+- Importing real project files (stretch only, Section 11)
+- Mobile/responsive layouts below 1100px wide (desktop-first only)
+- Drag-and-drop clip editing (use inspector inputs instead; drag is stretch)
+
+---
+
+## 3. Users and user stories
+
+**Personas:** Maya and Leo, two editors working on a product launch video.
+
+- US1. As an editor, I can see the history of my project as a graph of commits and branches.
+- US2. As an editor, I can create a branch from any commit and make changes without affecting main.
+- US3. As an editor, I can edit a clip's properties and commit with a message.
+- US4. As an editor, I can compare any two commits and see exactly what changed, color-coded on the timeline and in a plain-English list.
+- US5. As an editor, I can merge a branch into the current branch and see which changes were applied automatically and which need my decision.
+- US6. As an editor, I can resolve each conflict with one click, previewing both options.
+- US7. As an editor, I can scrub/play any version in a preview.
+- US8. As a new visitor, I can click "Load demo project" and immediately see an interesting state.
+
+---
+
+## 4. PRD — features, priorities, acceptance criteria
+
+Priority: **P0** = required, **P1** = required if time allows (build in order), **P2** = optional.
+
+### F1. Timeline model and renderer (P0)
+- Timeline has tracks: `V1` (Video), `V2` (B-roll overlay), `A1` (Voiceover), `A2` (Music), `A3` (SFX), `C1` (Captions).
+- Each clip is a rectangle positioned by `start` (seconds) and sized by duration, with its label inside.
+- Zoom slider (20–120 px per second), shared time ruler with second ticks, horizontal scroll.
+- Audio clips show a deterministic pseudo-waveform (seeded by clip id) as decoration.
+- **Acceptance:** the demo base commit renders all clips at the correct positions; zoom works; layout is stable between re-renders.
+
+### F2. Commits, branches, history graph (P0)
+- Data: commits (with one or two parents), branch pointers, HEAD (current branch).
+- Actions: **Commit** (requires message, author defaults to "You"), **New branch** (from HEAD or from a selected commit), **Checkout** branch or commit (detached view is read-only), **Delete branch** (not the current one, not `main`).
+- Working copy: the timeline you edit is a working copy separate from the HEAD commit. Show an "Uncommitted changes" badge when it differs. Checkout with uncommitted changes asks for confirmation to discard.
+- History graph: SVG, left sidebar. One lane per branch, dots for commits, lines for parents, branch labels as pills on tip commits, merge commits show two incoming lines. Click a commit to select it; shift-click or "Compare with…" to choose a second commit.
+- **Acceptance:** creating branches and commits updates the graph immediately; merge commits draw two parent lines; state survives page reload.
+
+### F3. Clip inspector with basic editing (P1)
+- Click a clip to select it (highlight ring). Right panel shows: label, track, source, `start`, `sourceIn`, `sourceOut`, `speed`, effects (toggle chips: `fade-in`, `fade-out`, `warm`, `cool`, `bw`), caption text (captions only).
+- Editing any field updates the working copy live. "Delete clip" button. "Add clip" button (adds a clip from the media library onto a chosen track at the playhead).
+- Validation: `sourceOut > sourceIn`, `sourceOut <= source duration`, `start >= 0`.
+- **Acceptance:** editing a field changes the timeline and the preview, shows the uncommitted badge, and can be committed.
+
+### F4. Diff engine and Compare view (P0)
+- Pick any two commits (A = before, B = after). Compare view shows two stacked timelines (A on top, B below) on a shared ruler, with changes color-coded on the B timeline and removed clips drawn as red hatched ghosts on the B timeline at their old position.
+- Change kinds and styling:
+  - **added** (green, `+`), **removed** (red hatched, `−`), **moved** (blue, `↔`, dashed ghost at old position with an arrow), **trimmed** (amber, `✂`), **modified** (purple, `✎`).
+  - Always use an icon/letter badge in addition to color (not color-only).
+- Right panel "What changed": grouped list, one plain-English sentence per change (Section 7.6). Hover a list item to highlight the clip; click to scroll it into view. A header shows counts, e.g. "9 changes: 3 added, 1 removed, 2 trimmed, 2 moved, 1 modified".
+- A/B swipe slider (P2): optional.
+- **Acceptance:** diffing `main@Add voiceover & music` against the demo `captions` tip shows the exact expected changes in Section 5.3.
+
+### F5. Three-way merge engine (P0)
+- Merge branch `theirs` into the current branch `ours`.
+- Find the **lowest common ancestor (LCA)** commit as base.
+- If `theirs` is already an ancestor of `ours`: show "Already up to date".
+- If `ours` is an ancestor of `theirs`: **fast-forward** (move the branch pointer, no merge commit).
+- Otherwise run the three-way merge (Section 7.5) and produce: merged timeline (with conflicts left unresolved), list of auto-applied changes, list of conflicts.
+- **Acceptance:** results match Section 5.4 for the demo scenario; all unit tests in Section 7.8 pass.
+
+### F6. Merge view and conflict resolution UI (P0)
+- Merge view layout: top summary ("2 conflicts, 6 changes applied automatically"), left list of auto-applied changes (grouped by who made them: "from main" / "from broll"), center preview of the merged timeline with conflicted clips highlighted in rose with a `!` badge, right column of **conflict cards**.
+- Each conflict card shows: clip label, what conflicts, three small columns **Base / Ours / Theirs** (mini timeline strip or value comparison), and action buttons:
+  - Field conflict: `Take ours` / `Take theirs`
+  - Delete-vs-modify: `Keep clip (their version)` / `Delete clip`
+  - Collision (two clips overlapping on the same track): `Keep ours` / `Keep theirs` / `Keep both (move theirs to a new track)`
+- Selecting a resolution turns the card green, and the merged timeline preview updates instantly.
+- `Complete merge` button disabled until all conflicts are resolved; on completion, creates a merge commit with two parents, message auto-filled as `Merge 'broll' into 'main'` (editable), and returns to the workspace.
+- `Abort merge` returns without changes.
+- **Acceptance:** completing the demo merge produces a valid timeline with no overlaps on any single track and the graph shows a merge commit.
+
+### F7. Virtual preview player (P0)
+- See Section 6.5. Play/pause, scrubber synced with a playhead on the timeline, current timecode. In Compare view show two players side by side labeled A and B, driven by one shared playhead.
+- **Acceptance:** scrubbing the playhead updates both players; effects and captions visibly differ between versions in the demo.
+
+### F8. Demo project, reset, persistence (P0)
+- Empty state shows a prominent "Load demo project" button. A top-bar menu has "Reset demo" (restores seed data) and "Clear all".
+- State persists in `localStorage` (versioned key, e.g. `branchcut:v1`).
+- **Acceptance:** loading the demo yields exactly the history in Section 5.2; reload keeps state.
+
+### F9. Plain-English change summaries (P1)
+- Deterministic template-based sentences (Section 7.6). No AI/API calls.
+
+### F10. Guided demo tour (P2)
+- Optional "Start tour" button that highlights the 5 key steps of the demo story with tooltips. Skip if time is short.
+
+---
+
+## 5. Demo scenario and seed data (implement exactly)
+
+### 5.1 Media library (mock sources; no actual files needed)
+
+| sourceId | Duration (s) | Type | Color |
+|---|---|---|---|
+| intro.mp4 | 8 | video | indigo |
+| product-hero.mp4 | 10 | video | teal |
+| product-detail.mp4 | 10 | video | orange |
+| cta-end.mp4 | 8 | video | pink |
+| city-broll.mp4 | 6 | video | slate |
+| office-broll.mp4 | 6 | video | stone |
+| factory-broll.mp4 | 6 | video | amber |
+| voiceover.mp3 | 24 | audio | — |
+| score.mp3 | 24 | audio | — |
+| whoosh.wav | 2 | audio | — |
+| (captions) | — | text | — |
+
+Clip duration on the timeline = `(sourceOut - sourceIn) / speed`.
+
+### 5.2 Commit history
+
+```
+main:     m1 "Rough cut" ── m2 "Add voiceover & music"  (base)
+                               ├── captions: mc1 "Tighten intro" ── mc2 "Add captions"
+                               └── broll:    lb1 "Swap b-roll"   ── lb2 "Trim intro & add SFX"
+```
+`main` initially points to `m2`. Branch `captions` (author "Maya") and `broll` (author "Leo") both fork from `m2`. HEAD = `main`.
+
+**m1 "Rough cut" (author "Team")**
+- V1: `c_intro` (intro.mp4, in 0, out 6, start 0), `c_hero` (product-hero.mp4, 0–5, start 6), `c_detail` (product-detail.mp4, 2–8, start 11), `c_cta` (cta-end.mp4, 0–5, start 17)
+- V2: `c_broll1` (city-broll.mp4, 0–3, start 8), `c_broll2` (office-broll.mp4, 1–4, start 14)
+- Labels: Intro, Product hero, Product detail, Call to action, City b-roll, Office b-roll.
+
+**m2 "Add voiceover & music" (author "Team")** — m1 plus:
+- A1: `c_vo` (voiceover.mp3, 0–22, start 0, label "Voiceover")
+- A2: `c_music` (score.mp3, 0–22, start 0, label "Music")
+
+**mc1 "Tighten intro" (Maya):** `c_intro.sourceOut` 6 → 4.
+
+**mc2 "Add captions" (Maya):**
+- Add on C1 (sourceId `caption`, speed 1): `c_cap1` text "Meet the new dashboard", start 1, dur 4; `c_cap2` "Everything in one view", start 7, dur 4; `c_cap3` "Switch layouts in one click", start 14, dur 3.
+- Add effect `fade-out` to `c_cta`.
+- **Remove** `c_broll2` (so the third caption sits on a clean frame).
+
+**lb1 "Swap b-roll" (Leo):** `c_broll2.sourceId` office-broll.mp4 → factory-broll.mp4 and `c_broll2.start` 14 → 15 (label becomes "Factory b-roll").
+
+**lb2 "Trim intro & add SFX" (Leo):**
+- `c_intro.sourceOut` 6 → 5.
+- `c_broll1.start` 8 → 9.
+- Add on A3: `c_sfx` (whoosh.wav, 0–2, start 6, label "Whoosh").
+
+### 5.3 Expected diff: `m2` → `mc2` (captions tip)
+Exactly **6 changes**: **added** ×3 (c_cap1, c_cap2, c_cap3), **removed** ×1 (c_broll2), **trimmed** ×1 (c_intro: 6s → 4s), **modified** ×1 (c_cta: effect fade-out added). Use this exact expectation in tests.
+
+### 5.4 Expected merge: merge `broll` into `main` (after `main` fast-forwards to `mc2`)
+1. First, merging `captions` into `main` must be a **fast-forward** (no merge commit).
+2. Then merging `broll` into `main` (base = `m2`, ours = `mc2`, theirs = `lb2`):
+   - **Conflicts: exactly 2**
+     1. `c_intro.sourceOut`: base 6, ours 4, theirs 5 (field conflict)
+     2. `c_broll2`: ours **deleted**, theirs **modified** (delete-vs-modify)
+   - **Auto-applied from theirs: exactly 2** (`c_sfx` added; `c_broll1` moved 8 → 9)
+   - **Kept from ours (not in conflict): exactly 4** (3 captions added, `c_cta` effect added)
+3. After the user resolves both conflicts in any combination, the merged timeline must have no overlapping clips on any single track.
+
+---
+
+## 6. UX / UI specification
+
+### 6.1 Visual style
+- Dark theme, modern editor feel. Background `#0b0d12`, panels `#12151c`, borders `#222733`, text `#e7e9ee`, muted `#8b93a7`, accent `#6366f1`.
+- Change colors: added `#22c55e`, removed `#ef4444`, moved `#3b82f6`, trimmed `#f59e0b`, modified `#a855f7`, conflict `#f43f5e`.
+- Font: Inter (fallback system-ui). Monospace for timecodes. Rounded corners 8px, subtle shadows, smooth 150ms transitions.
+- Clip rectangles use the source color at 80% saturation; selected clip gets a 2px accent ring.
+
+### 6.2 App layout (desktop, min width 1100px)
+- **Top bar:** logo + name, project name, current branch dropdown, buttons `Commit`, `New branch`, `Merge…`, `Compare…`, overflow menu (Reset demo, Clear all). Mode tabs: `Workspace | Compare | Merge`.
+- **Left sidebar (280px):** History graph and a commit list below it.
+- **Center:** virtual preview player(s) on top, timeline below.
+- **Right panel (320px):** Inspector (Workspace), "What changed" (Compare), conflict cards (Merge).
+- **Footer:** disclaimer text (Section 1).
+
+### 6.3 Empty state
+Centered card: tagline, one-line explanation, large `Load demo project` button.
+
+### 6.4 Interactions
+- Space = play/pause. Left/Right arrows = ±1 second. Clicking the ruler moves the playhead.
+- Toasts for commit, branch, merge, errors.
+- Confirm dialogs only for destructive actions (discard changes, clear all, delete branch).
+
+### 6.5 Virtual preview player (no video decoding)
+For time `t`, compute the active clip on each track:
+- **V1** clip renders as a full-frame "scene card": gradient background in the source color, large label, small source filename and timecode. If there is no active V1 clip show a dark "No signal" frame.
+- **V2** clip renders as a picture-in-picture card (bottom-right, ~35% width) with its own color and label.
+- **Captions (C1)** render as bold white text with dark backing, bottom-center.
+- **Effects** map to CSS: `warm` → `sepia(0.4) saturate(1.2)`; `cool` → `hue-rotate(160deg) saturate(1.1)`; `bw` → `grayscale(1)`; `fade-in` / `fade-out` → opacity ramp over the first/last 0.5s of the clip.
+- **Audio clips** have no sound; show a small indicator row ("♪ Voiceover · ♪ Music") of active audio clips.
+- Add a clear note under the player: "Preview is simulated from timeline data."
+- (Stretch) If real mp4 files exist in `/public/media/<sourceId>`, use `<video>` instead of scene cards.
+
+### 6.6 Timeline rendering details
+- Track rows 44px high with a left label gutter (`V1`, `V2`, `A1`, `A2`, `A3`, `C1`).
+- Position with CSS: `left = start * pxPerSec`, `width = duration * pxPerSec`. Plain DOM, no canvas.
+- Playhead: vertical line with a draggable handle on the ruler.
+- In Compare: both timelines share horizontal scroll and zoom.
+
+---
+
+## 7. TRD — technical requirements
+
+### 7.1 Stack
+- **Vite + React 18 + TypeScript (strict)**, Tailwind CSS, Zustand (with `persist`), Vitest for tests.
+- No UI kit required; small custom components (optionally lucide-react for icons).
+- Replit config: Vite dev server must bind `host: '0.0.0.0'`, `port: 5000` (or the Replit default), and `allowedHosts: true`. Ensure `npm run dev` is the run command and the project can be deployed as a static site (`npm run build`).
+
+### 7.2 Folder structure
+```
+src/
+  core/                 # pure TS, no React/DOM imports
+    types.ts
+    timeline.ts         # helpers: clipDuration, indexClips, cloneTimeline, findOverlaps
+    diff.ts             # diffTimelines(a, b): Change[]
+    graph.ts            # commit graph: ancestors, lowestCommonAncestor, isAncestor
+    merge.ts            # threeWayMerge(base, ours, theirs): MergeResult; applyResolutions
+    summary.ts          # plain-English sentences for Change[] and Conflict[]
+    seed.ts             # demo data (Section 5)
+    __tests__/          # diff.test.ts, merge.test.ts, graph.test.ts, summary.test.ts
+  store/
+    useRepoStore.ts     # commits, branches, HEAD, working copy, actions, persistence
+    useUiStore.ts       # mode, selection, playhead, zoom, compare pair, merge session
+  components/
+    layout/ (TopBar, Sidebar, RightPanel, Footer)
+    timeline/ (Timeline, Track, ClipBlock, Ruler, Playhead)
+    graph/ (HistoryGraph)
+    preview/ (PreviewPlayer, SceneCard)
+    compare/ (CompareView, ChangeList)
+    merge/ (MergeView, ConflictCard)
+    inspector/ (Inspector)
+    common/ (Button, Badge, Toast, ConfirmDialog, EmptyState)
+  App.tsx, main.tsx, index.css
+README.md
+```
+
+### 7.3 Data model (TypeScript)
+```ts
+export type TrackId = 'V1' | 'V2' | 'A1' | 'A2' | 'A3' | 'C1';
+export type EffectId = 'fade-in' | 'fade-out' | 'warm' | 'cool' | 'bw';
+
+export interface Clip {
+  id: string;            // STABLE across versions; this is what makes "moved" different from "deleted + added"
+  label: string;
+  trackId: TrackId;
+  sourceId: string;      // media source, or 'caption'
+  sourceIn: number;      // seconds
+  sourceOut: number;     // seconds
+  start: number;         // seconds on the timeline
+  speed: number;         // default 1
+  effects: EffectId[];   // treat as a set (order-insensitive)
+  caption?: string;      // captions only
+}
+
+export interface Timeline { clips: Clip[]; }   // flat list; trackId on each clip
+
+export interface Commit {
+  id: string;
+  parents: string[];     // 0 (root), 1 (normal), or 2 (merge)
+  branch: string;        // branch it was created on
+  message: string;
+  author: string;
+  createdAt: number;
+  timeline: Timeline;    // full snapshot (immutable)
+}
+
+export interface RepoState {
+  commits: Record<string, Commit>;
+  branches: Record<string, string>;   // branch name -> tip commit id
+  head: { type: 'branch'; name: string } | { type: 'detached'; commitId: string };
+  working: Timeline;                  // editable working copy
+}
+
+export type ChangeKind = 'added' | 'removed' | 'moved' | 'trimmed' | 'modified';
+export interface Change {
+  clipId: string;
+  kind: ChangeKind;
+  label: string;
+  detail?: {
+    fromStart?: number; toStart?: number;
+    fromTrack?: TrackId; toTrack?: TrackId;
+    fromIn?: number; toIn?: number; fromOut?: number; toOut?: number;
+    fields?: string[];                 // for 'modified'
+  };
+}
+
+export type ConflictKind = 'field' | 'delete-modify' | 'collision';
+export interface Conflict {
+  id: string;
+  clipId: string;
+  kind: ConflictKind;
+  field?: keyof Clip;                  // for 'field'
+  base?: unknown; ours?: unknown; theirs?: unknown;
+  oursDeleted?: boolean; theirsDeleted?: boolean;   // for 'delete-modify'
+  collidesWith?: string;               // other clip id for 'collision'
+  resolution?: 'ours' | 'theirs' | 'both';
+}
+
+export interface MergeResult {
+  merged: Timeline;                    // with non-conflicting changes applied; conflicts use ours as provisional value
+  conflicts: Conflict[];
+  appliedFromTheirs: Change[];
+  keptFromOurs: Change[];
+}
+```
+
+### 7.4 Diff algorithm (`diffTimelines(a, b)`)
+1. Index both timelines by `clip.id` (Map).
+2. For each clip in B: if missing in A → `added`. Otherwise compare against A and emit (a clip may emit several):
+   - `moved` if `start` changed **or** `trackId` changed.
+   - `trimmed` if `sourceIn`, `sourceOut`, or `speed` changed.
+   - `modified` if `sourceId`, `label`, `caption`, or effects (as sets) changed. Record changed field names.
+3. For each clip in A missing from B → `removed`.
+4. Return changes sorted by earliest timeline position, then kind. Pure function; no mutation.
+
+### 7.5 Three-way merge algorithm (`threeWayMerge(base, ours, theirs)`)
+Compare **per clip id, per field**. Fields: `trackId, sourceId, sourceIn, sourceOut, start, speed, effects (set compare), caption, label`.
+
+For every clip id in the union of base/ours/theirs:
+- **Presence logic**
+  - In neither ours nor theirs (deleted by both) → drop.
+  - Added only in ours, or only in theirs (not in base) → include it.
+  - Added in both with the same id → merge field-wise using `base = undefined` (conflicts on differing fields).
+  - Deleted in ours, unchanged in theirs (theirs equals base) → delete. Same for the symmetric case.
+  - Deleted in one side and **modified** in the other → `delete-modify` conflict (provisional value: keep the deleted state of ours/theirs as it was, mark unresolved).
+- **Field logic** (clip exists in both ours and theirs):
+  ```ts
+  function mergeField<T>(base: T, ours: T, theirs: T) {
+    if (eq(ours, theirs)) return { value: ours };
+    if (eq(base, ours))   return { value: theirs };   // only theirs changed
+    if (eq(base, theirs)) return { value: ours };     // only ours changed
+    return { conflict: { base, ours, theirs } };
+  }
+  ```
+  `effects` are compared as sorted arrays. A conflict uses the **ours** value provisionally.
+- **Post-merge collision check:** after building the merged clip list, scan each track for overlapping time ranges (`[start, start+duration)`); for each overlapping pair that isn't already part of a field conflict on the same clips, create a `collision` conflict. (Captions and V2 may not overlap other clips on the same track either.)
+- Track which changes came from theirs vs ours for the summary lists (`appliedFromTheirs`, `keptFromOurs`) by diffing `base→theirs` and `base→ours` on non-conflicting clips/fields.
+- `applyResolutions(result, resolutions)` returns a final `Timeline`:
+  - field: choose ours or theirs value
+  - delete-modify: `ours`/`theirs` selects which side's state wins (deleted vs kept)
+  - collision: `ours` / `theirs` keep one; `both` moves the "theirs" clip to an overflow track (add `V3` dynamically if needed, but only used for this case)
+  - Re-run collision detection after applying; the final timeline must contain no overlaps.
+
+### 7.6 Plain-English summaries (`summary.ts`)
+Deterministic templates, e.g.:
+- added: `Added "{label}" on {track} at {start}s`
+- removed: `Removed "{label}" from {track}`
+- moved: `Moved "{label}" from {fromStart}s to {toStart}s` (or `from {fromTrack} to {toTrack}`)
+- trimmed: `Trimmed "{label}" from {oldDur}s to {newDur}s`
+- modified: `Changed {fields} on "{label}"` (e.g. "Added effect fade-out")
+- conflict: `"{label}": {field} was set to {ours} on your branch and {theirs} on theirs`
+
+Format seconds to at most one decimal.
+
+### 7.7 State management and persistence
+- `useRepoStore` (persisted): all repo state plus actions: `loadDemo`, `reset`, `clearAll`, `updateClip`, `addClip`, `deleteClip`, `commit(message)`, `createBranch(name, fromCommitId?)`, `deleteBranch`, `checkout(target, {discard})`, `startMerge(theirsBranch)`, `completeMerge(resolutions, message)`.
+- `useUiStore` (not persisted): mode, selected clip id, compare pair `[aId, bId]`, playhead time, zoom, active merge session (`MergeResult` + resolutions).
+- Persist key `branchcut:v1`; include a version field so stale data can be discarded safely.
+- Commit timelines are deep-cloned snapshots; never mutate commits.
+- ID generation: short random ids for new commits/conflicts; seed data uses the fixed ids from Section 5.
+
+### 7.8 Testing requirements (Vitest, must pass)
+**diff.test.ts**
+- added / removed / moved (start change) / moved (track change) / trimmed (in, out, speed) / modified (effects set, caption, sourceId) each detected correctly.
+- A clip with both moved and trimmed emits two changes.
+- Effects order change alone → no change.
+- Seed: diff(`m2`, `mc2`) yields exactly 6 changes (3 added, 1 removed, 1 trimmed, 1 modified).
+
+**graph.test.ts**
+- `isAncestor`, `lowestCommonAncestor` for linear, branched, and merge-commit histories (two parents).
+- Seed: LCA(`mc2`, `lb2`) = `m2`.
+
+**merge.test.ts**
+- Only-ours change, only-theirs change, same change both sides, conflicting field change, delete-vs-modify (both directions), added-only-one-side, added-both-sides-same-id.
+- Collision detection after merge; `both` resolution creates no overlaps.
+- Seed scenario (Section 5.4): exactly 2 conflicts (`c_intro.sourceOut`, `c_broll2` delete-modify), `appliedFromTheirs` has exactly 2 changes (`c_sfx` added, `c_broll1` moved), and every combination of the 2 resolutions yields a timeline with no overlaps.
+- Fast-forward detection and "already up to date" detection.
+
+**summary.test.ts**
+- Sentences render correctly for each change kind and for a field conflict.
+
+### 7.9 Quality, performance, accessibility
+- TypeScript strict; no `any` in `src/core`. ESLint-clean if configured.
+- Timeline of ~25 clips renders instantly; avoid unnecessary re-renders (memoize ClipBlock).
+- Keyboard-focusable buttons, visible focus rings, `aria-label`s on icon-only buttons. Do not rely on color alone for change types (use badges).
+
+---
+
+## 8. Build phases (follow in order)
+
+**Phase 1 — Foundation and timeline:** Project setup, Tailwind, folder structure, `core/types.ts`, `core/timeline.ts`, `core/seed.ts` (full Section 5 data), Zustand stores, static layout shell, Timeline renderer with ruler, zoom, tracks, clip blocks, empty state with `Load demo project`. *Checkpoint:* loading the demo shows the `main` tip timeline correctly.
+
+**Phase 2 — Core engine + tests:** Implement `diff.ts`, `graph.ts`, `merge.ts`, `summary.ts` and all unit tests from 7.8. *Checkpoint:* `npm test` passes; seed expectations (6 changes; 2 conflicts; 2 theirs-applied) verified.
+
+**Phase 3 — Repo features:** Commit, branch, checkout, delete branch, working copy + uncommitted badge, History graph (SVG) with lanes, merge-commit lines, branch pills; commit list; persistence. *Checkpoint:* the demo graph matches Section 5.2; reload preserves state.
+
+**Phase 4 — Preview + inspector:** Virtual preview player with playhead sync, effects, captions, PiP b-roll; inspector with editing + validation + add/delete clip. *Checkpoint:* edit a clip → preview and timeline change → commit works.
+
+**Phase 5 — Compare:** Compare view with two stacked timelines, color/badge styling, ghosts for removed/moved, side-by-side synced players, "What changed" panel with hover/click linking and counts. *Checkpoint:* compare `m2` ↔ `mc2` matches Section 5.3.
+
+**Phase 6 — Merge:** Merge flow with fast-forward and up-to-date handling, Merge view, conflict cards with resolutions, live merged preview, complete/abort, merge commit creation. *Checkpoint:* the full Section 5.4 flow works, including the fast-forward of `captions` into `main` first.
+
+**Phase 7 — Polish and deploy:** Toasts, confirm dialogs, keyboard shortcuts, animations, empty/error states, footer disclaimer, README, final visual pass for 1080p recording, make sure `npm run build` succeeds and the app is deployable. *Optional if time remains:* guided tour (F10).
+
+---
+
+## 9. Definition of done (acceptance checklist)
+
+- [ ] `Load demo project` produces the exact history in Section 5.2.
+- [ ] Compare `m2` ↔ `mc2` shows 6 changes with correct kinds and colors/badges.
+- [ ] Merging `captions` into `main` fast-forwards (no merge commit).
+- [ ] Merging `broll` into `main` shows exactly 2 conflicts and 2 theirs-applied changes.
+- [ ] Both conflicts can be resolved with one click each; the merged preview updates live.
+- [ ] Completing the merge creates a merge commit with two parents, drawn correctly in the graph.
+- [ ] The final merged timeline has no overlapping clips on any track.
+- [ ] Editing a clip in the inspector, committing, and branching all work.
+- [ ] State persists across reloads; Reset demo works.
+- [ ] `npm test` passes; `npm run build` succeeds; no console errors during the demo flow.
+- [ ] Footer disclaimer is visible; README is complete.
+
+---
+
+## 10. README requirements
+
+Include: what it is and the problem it explores; a short demo GIF placeholder section; the demo story (Maya and Leo); how the diff works; how the three-way merge works (with the `mergeField` rule); the data model; how to run, test, and deploy; **Assumptions and limitations** (mock data, simplified timeline format, no ripple, simulated preview, not affiliated with Cardboard); and **"What I'd do next"**: ripple-aware merging, CRDT-based real-time collaboration, importing real timeline formats (e.g. OpenTimelineIO), plugging into a real editor's API/MCP server, and merge conflict UX research with real editors.
+
+---
+
+## 11. Stretch goals (only after everything above is done and tested)
+
+1. A/B swipe slider in Compare view.
+2. Guided demo tour (F10).
+3. Drag clips to move/trim on the timeline.
+4. Real `<video>` preview when media files are present in `/public/media`.
+5. Import a simple OpenTimelineIO JSON file into the data model.
+6. Optional AI-written changelog behind a toggle (must degrade gracefully to the template summaries).

@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "QHSPSkX08hKxaZhjE4tLo"
+uri = "file://tasks/plan.md"
+type = "text"
+title = "Branchcut — Readiness review and build plan"
+description = "Feasibility assessment, scoped resolutions for specification conflicts, architecture, specialist assignments and verification gates."
+logical_id = "79f45221-2d55-435b-ac82-81deb8ee4f7a"
+content_hash = "sha256:bf34d2ece8d1bf19a70983fb8865492697fdd9f79c346142947cff9840fed99c"
+size = 12995
+mtime_ms = 1794375357725
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/conversation:1e674176-b932-4ae8-b03e-c2b9964e76b4/79f45221-2d55-435b-ac82-81deb8ee4f7a/7894e663-8af2-4e0b-9f13-5b981fbb2759"
+storage_version_token = "1794375386626413"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "oo2bTpkpieAsB_busaEJw"
+uri = "file://tasks/todo.md"
+type = "text"
+title = "Branchcut — 24-task implementation checklist"
+description = "Seven ordered phases with acceptance criteria, dependencies, ownership, planned files and checkpoints. Implementation has not started."
+logical_id = "d1ccc5b0-0b29-4c58-bb02-3cbf4da3b6e1"
+content_hash = "sha256:7f32bbf608d7e92320da36c8c377feb122c961486a24e4cd6e6731f7f51fe3e7"
+size = 14465
+mtime_ms = 1794375367989
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/conversation:1e674176-b932-4ae8-b03e-c2b9964e76b4/d1ccc5b0-0b29-4c58-bb02-3cbf4da3b6e1/0f912dbd-b86a-4c32-8c2c-d9c9e90c851f"
+storage_version_token = "1794375389685178"
+content_type = "text/markdown"

@@ -1,44 +1,53 @@
-# [Project name]
+# Branchcut
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Browser-only version control for structured video timelines, with visual diff/merge and simulated playback.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- Start the managed `artifacts/branchcut: web` workflow for the app.
+- `pnpm --filter @workspace/branchcut run test` — pure core and repository tests
+- `pnpm --filter @workspace/branchcut run typecheck` — application TypeScript check
+- `pnpm --filter @workspace/branchcut run build` — checked static build
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Branchcut requires no secrets, database, backend or application API. Template API/database libraries are unused.
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- React 18, Vite, strict TypeScript, Tailwind, Zustand persist, Vitest.
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/branchcut/src/core`: pure timeline, seed, diff, graph, merge and summary code.
+- `artifacts/branchcut/src/store`: repository transitions and temporary UI/merge state.
+- `artifacts/branchcut/src/components`: desktop editor presentation.
+- `README.md`: source prompt assumptions, demo story and static-host instructions.
+- `.local/conversation-workspace/files/tasks`: original approved plan and 24-task breakdown.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Follow the supplied seven phases. Test core before adding dependent Compare/Merge UI.
+- Preserve the exact demo's six changes, two conflicts, two theirs-applied and four kept-ours changes.
+- All persistence is browser localStorage. No backend/auth/remote fonts/media APIs.
+- Final merge completion must validate both field/presence decisions and freshly revealed collisions.
+- P2/stretch work is deferred, not required for acceptance.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Branch, commit, checkout and compare immutable cuts. Resolve three-way merge conflicts visually and preview the simulated timeline.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Keep the implementation inside the supplied frontend-only scope and record reasonable assumptions instead of expanding scope.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The shared scaffold originally used React 19; Branchcut alone is pinned to React 18 as requested. Do not move its entry point to React 19-only createRoot options.
+- Use managed artifact workflows, not a second manually started Vite server.
+- npm test/build/dev scripts run from the application package; dependency installation uses pnpm.
 
 ## Pointers
 

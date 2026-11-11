@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Branchcut"
+description = "Browser-only version control for video timelines: branch, compare, and merge structured cuts with a simulated preview."
+version = "1.0.0"
+id = "artifacts/branchcut"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18926
+
+[services.development]
+run = "pnpm --filter @workspace/branchcut run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/branchcut", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/branchcut/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18926"
+BASE_PATH = "/"
